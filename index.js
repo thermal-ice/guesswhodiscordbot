@@ -50,6 +50,27 @@ function getHelpMsg(){
         "(e.g @bob)."
 }
 
+function quizSendAndListen(message, messages, filter){
+    let randomMsg = getRandomElemFromArr(messages);
+    let msgAuthor = randomMsg.author
+    message.channel.send(randomMsg.content).then( () =>{
+        message.channel.awaitMessages(filter,{max:1, time: 20000}).then(
+            (collected)=>{
+                let firstMsg = collected.first();
+                if(firstMsg.mentions.members.size > 1 || firstMsg.mentions.members.size === 0){
+                    return message.channel.send("You MUST mention only 1 person. Try again dumbass");
+                }
+                let guess = firstMsg.mentions.has(msgAuthor);
+                if (guess){
+                    return message.channel.send(`Correct guess! It was ${msgAuthor.username} `);
+                }else{
+                    return message.channel.send(`incorrect guess! Right guess was  ${msgAuthor.username} !`);
+                }
+            }).catch(() =>{
+            message.channel.send(`Timed out, hurry up dumbass. It was ${msgAuthor.username}`);
+        });
+    }).catch(console.error);
+}
 
 
 client.on("message", (message)=>{
@@ -101,42 +122,17 @@ client.on("message", (message)=>{
             break;
         case "quiz":
             const filter = (m) => m.author.id === message.author.id;
+
             if(mostRecentMsgs.length === 0){
-                getMessages(message.channel,500).then(
+                getMessages(message.channel,800).then(
                     (messages) => {
-                        mostRecentMsgs = messages;
-                        let randomMsg = getRandomElemFromArr(messages);
-                        let msgAuthor = randomMsg.author
-                        message.channel.send(randomMsg.content).then( () =>{
-                            message.channel.awaitMessages(filter,{max:1, time: 20000}).then(
-                                (collected)=>{
-                                    let guess = collected.first().mentions.has(msgAuthor);
-                                    if (guess){
-                                        return message.channel.send("Correct guess!");
-                                    }else{
-                                        return message.channel.send(`incorrect guess! Right guess was  ${msgAuthor.username} !`);
-                                    }
-                                }).catch(() =>{
-                                message.channel.send(`Timed out, hurry up dumbass. It was ${msgAuthor.username}`);
-                            });
-                        }).catch(console.error);
+                        mostRecentMsgs = messages.filter( (m) =>{
+                            return !m.author.bot && m.content.length !== 0;
+                        });
+                       quizSendAndListen(message, mostRecentMsgs, filter);
                     }).catch(console.error);
             }else{
-                let randomMsg = getRandomElemFromArr(mostRecentMsgs);
-                let msgAuthor = randomMsg.author
-                message.channel.send(randomMsg.content).then( () =>{
-                    message.channel.awaitMessages(filter,{max:1, time: 10000}).then(
-                        (collected)=>{
-                            let guess = collected.first().mentions.has(msgAuthor);
-                            if (guess){
-                                return message.channel.send("Correct guess!");
-                            }else{
-                                return message.channel.send(`incorrect guess! Right guess was  ${msgAuthor.username} !`);
-                            }
-                        }).catch(() =>{
-                        message.channel.send(`Timed out, hurry up dumbass. It was ${msgAuthor.username}`);
-                    });
-                }).catch(console.error);
+                quizSendAndListen(message,mostRecentMsgs, filter);
             }
 
     }
