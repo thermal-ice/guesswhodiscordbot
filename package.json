@@ -13,7 +13,6 @@
   "dependencies": {
     "discord.js": "^12.5.1",
     "node": "^15.4.0",
-    "set-interval-async": "1.0.34",
-    "request": "2.81.0"
+    "set-interval-async": "1.0.34"
   }
 }
