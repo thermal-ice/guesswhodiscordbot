@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start" : "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -12,6 +13,7 @@
   "dependencies": {
     "discord.js": "^12.5.1",
     "node": "^15.4.0",
-    "set-interval-async": "1.0.34"
+    "set-interval-async": "1.0.34",
+    "request": "2.81.0"
   }
 }
