@@ -2,6 +2,8 @@
 const Discord = require('discord.js')
 const config = require('./config.json')
 const ChannelMessageStorageFile = require('./channelMessageStorage')
+const botConfigerations = require('./botConfigerations');
+
 
 const client = new Discord.Client();
 
@@ -10,10 +12,31 @@ const client = new Discord.Client();
 
 
 const prefix = "!";
+const numChoices = 4
 
 function getRandomElemFromArr(array){
     return array[Math.floor(Math.random() * array.length)];
 
+}
+
+function addElemToRandomIndexInArr(array, elem){
+    let index = Math.floor(Math.random() * array.length);
+    array.splice(index,0,elem);
+    return array;
+}
+
+function getNRandomFromArr(arr, n) {
+    let result = new Array(n),
+        len = arr.length,
+        taken = new Array(len);
+    if (n > len)
+        throw new RangeError("getRandom: more elements taken than available");
+    while (n--) {
+        let x = Math.floor(Math.random() * len);
+        result[n] = arr[x in taken ? taken[x] : x];
+        taken[x] = --len in taken ? taken[len] : len;
+    }
+    return result;
 }
 
 function messageOnlyContainsMentions(messageContent){
@@ -32,33 +55,8 @@ async function getMessages(channel, limit = 200){
         let messages = await channel.messages.fetch({ limit: limit })
         out.push(...messages.array())
     } else {
-        // let rounds = (limit / 100) + (limit % 100 ? 1 : 0)
         let last_id= ""
         let numCycles = 0;
-        // for (let x = 0; x < rounds; x++) {
-        //     const options = {
-        //         limit: 100
-        //     }
-        //     if (last_id.length > 0) {
-        //         options.before = last_id
-        //     }
-        //     try{
-        //         const messages = await channel.messages.fetch(options,true).catch(console.error)
-        //         if(messages.array().length === 0){
-        //             break;
-        //         }
-        //
-        //         let filteredMsgs = messages.array().filter ( m =>{
-        //             return m !== undefined && (m.attachments.size > 0 ||m.content.length !== 0);
-        //         })
-        //
-        //         out.push(...filteredMsgs)
-        //         last_id = filteredMsgs[(filteredMsgs.length - 1)].id
-        //     }catch (err){
-        //         console.error(err)
-        //     }
-        //
-        // }
 
         const options = {limit: 100};
 
@@ -68,11 +66,10 @@ async function getMessages(channel, limit = 200){
             }
 
             //TODO: need to change in future
-            if((numCycles * 10) +1 > limit){
+            if((numCycles * 5) +1 > limit){
                 console.error("We're stuck in an infinite loop when fetching messages somehow");
                 break;
             }
-
             try{
                 const messages = await channel.messages.fetch(options,true).catch(console.error);
 
@@ -82,7 +79,6 @@ async function getMessages(channel, limit = 200){
                     break;
                 }
 
-
                 let filteredMsgs = msgsArr.filter ( m =>{
                     return m !== undefined && (m.attachments.size > 0 || m.content.length > 0)
                         && !m.author.bot
@@ -90,14 +86,12 @@ async function getMessages(channel, limit = 200){
                         && !messageOnlyContainsMentions(m.content);
                 });
 
-
                 out.push(...filteredMsgs);
                 last_id = msgsArr[(msgsArr.length - 1)].id;
 
             }catch (error){
                 console.error(error);
             }
-
             numCycles++;
         }
     }
@@ -111,38 +105,137 @@ function getHelpMsg(){
         "(e.g @bob)."
 }
 
+function fetchUsersFromGuildExcludingOne(guild,userToExclude){
+    return guild.members.fetch({limit: 80}).then(
+        (members)=>{
+            let filteredMembersArr = members.array().filter( (member) =>{
+                return member.user.id !== userToExclude.id && !member.user.bot;
+            });
+
+            let filteredMembersUserNamesArr = filteredMembersArr.map( (member) =>{
+                return member.user.username;
+            })
+
+            let finalUserNamesArr = getNRandomFromArr(filteredMembersUserNamesArr,numChoices);
+            let userIndex = Math.floor(Math.random() * (numChoices +1));
+
+            finalUserNamesArr.splice(userIndex,0,userToExclude.username);
+
+            return [ userIndex, finalUserNamesArr];
+        }
+    ).catch(console.error);
+}
+
+
+function getTypeOfMessage(message){
+    if (message.content.length > 0 && message.attachments.size >0) return "both";
+    if (message.content.length > 0) return "text";
+    if (message.attachments.size > 0) return "image";
+    //Does not have text nor images, something weird happened
+    return "neither";
+}
+
+
+async function awaitAndGetReactionsToMessage(quizMessage,authorIndex,choicesArr){
+    const numbersEmojis = botConfigerations.numbersEmojis;
+
+
+    const filter = (reaction, user) => {
+        return numbersEmojis.includes(reaction.emoji.name) && user.id === quizMessage.author.id;
+    };
+
+    let msgToSend = ""
+
+    choicesArr.forEach( (currVal,index) => {
+        msgToSend += `${(index+1)}) ${currVal}  `;
+    })
+
+
+    let message =  await quizMessage.channel.send(`The choices are: ${msgToSend}`).catch(console.error)
+
+    numbersEmojis.forEach( (emoji) => {
+        message.react(emoji);
+    })
+
+    message.awaitReactions(filter, { max: 1, time: 10000, errors: ['time'] })
+        .then(collected => {
+            const reaction = collected.first();
+
+            let emojiIndex = numbersEmojis.indexOf(reaction.emoji.name);
+
+            if(emojiIndex === -1){
+                quizMessage.reply("carlos fucked up somewhere");
+                return;
+            }
+
+            if(emojiIndex === authorIndex){
+                quizMessage.channel.send(`Correct, it indeed was: **${choicesArr[authorIndex]} **`)
+            }else{
+                quizMessage.channel.send(`Incorrect lmao! It's not **${choicesArr[emojiIndex]}**, it actually was **${choicesArr[authorIndex]}**`);
+            }
+
+        })
+        .catch(collected => {
+            message.reply(`Timed out, you need to pick one of the options dumbass. It was **${choicesArr[authorIndex]}**`);
+        });
+}
 
 function quizSendAndListen(quizMessage,channelMessageManagerInstance , filter){
 
     let messagesArr = channelMessageManagerInstance.getMessagesFromChannel(quizMessage.channel);
     if (messagesArr === -1){
-        console.log("fuck, couldn't get messages for some reason");
+        quizMessage.channel.send("fuck, couldn't get messages for some reason");
         return;
     }
     let randomMsg = getRandomElemFromArr(messagesArr);
-    let msgAuthor = randomMsg.author
-    quizMessage.reply(` guess who said the message below: \n> ${randomMsg.content}`).then( () =>{
-        if(randomMsg.attachments.size >0) {
-            randomMsg.attachments.forEach( (messageAttachment)=>{
-                quizMessage.channel.send(messageAttachment.url);
-            })
-        }
-        quizMessage.channel.awaitMessages(filter,{max:1, time: 20000}).then(
-            (collected)=>{
-                let firstMsg = collected.first();
-                if(firstMsg.mentions.members.size > 1 || firstMsg.mentions.members.size === 0){
-                    return quizMessage.channel.send(`You MUST mention only 1 person. Try again dumbass. It was ${msgAuthor}`);
-                }
-                let guess = firstMsg.mentions.has(msgAuthor);
-                if (guess){
-                    return quizMessage.channel.send(`Correct guess! It indeed was ${msgAuthor.username} `); //message.author.username
-                }else{
-                    return quizMessage.channel.send(`incorrect guess! Right guess was  ${msgAuthor.username} !`);
-                }
-            }).catch(() =>{
-            quizMessage.channel.send(`Timed out, hurry up dumbass. It was ${msgAuthor.username}`);
-        });
-    }).catch(console.error);
+    let msgAuthor = randomMsg.author;
+
+
+
+    let messageType = getTypeOfMessage(quizMessage);
+
+    switch (messageType) {
+        case "text":
+            quizMessage.reply(`guess who said the message below: \n ${randomMsg.content}`).then( ()=>{
+                fetchUsersFromGuildExcludingOne(quizMessage.guild , msgAuthor).then( (fetchResult) =>{
+                    let index = fetchResult[0];
+                    let userNamesArr = fetchResult[1];
+
+                    awaitAndGetReactionsToMessage(quizMessage,index,userNamesArr).catch(console.error);
+                });
+
+            }).catch(console.error);
+
+    }
+
+
+
+
+
+
+    //
+    // quizMessage.reply(` guess who said the message below: \n> ${randomMsg.content}`).then( () =>{
+    //     if(randomMsg.attachments.size >0) {
+    //         randomMsg.attachments.forEach( (messageAttachment)=>{
+    //             quizMessage.channel.send(messageAttachment.url);
+    //         })
+    //     }
+    //     quizMessage.channel.awaitMessages(filter,{max:1, time: 20000}).then(
+    //         (collected)=>{
+    //             let firstMsg = collected.first();
+    //             if(firstMsg.mentions.members.size > 1 || firstMsg.mentions.members.size === 0){
+    //                 return quizMessage.channel.send(`You MUST mention only 1 person. Try again dumbass. It was ${msgAuthor}`);
+    //             }
+    //             let guess = firstMsg.mentions.has(msgAuthor);
+    //             if (guess){
+    //                 return quizMessage.channel.send(`Correct guess! It indeed was ${msgAuthor.username} `); //message.author.username
+    //             }else{
+    //                 return quizMessage.channel.send(`incorrect guess! Right guess was  ${msgAuthor.username} !`);
+    //             }
+    //         }).catch(() =>{
+    //         quizMessage.channel.send(`Timed out, hurry up dumbass. It was ${msgAuthor.username}`);
+    //     });
+    // }).catch(console.error);
 }
 
 //
@@ -170,23 +263,41 @@ client.on("message", (message)=>{
     const args = commandBody.split(' ');
     const command = args.shift().toLowerCase();
 
-    switch (command){
 
-        case "whobot_help":
-            // console.log(message);
-            // message.attachments.forEach((attachments) =>{
-            //     message.channel.send(attachments.url);
-            // })
-            message.reply(getHelpMsg());
+    switch (command){
+        case "a":
+            // console.log("step 1");
+            // message.guild.members.fetch({limit: 5}).then(
+            //     (members)=>{
+            //         console.log("step 2")
+            //         console.log(members);
+            //     }
+            // ).catch(console.error);
+            // break;
+            // fetchUsersFromGuildExcludingOne(message.guild,"blah");
+            // fetchUsersFromGuildExcludingOne(message.guild,message.author)
+
+            // awaitAndGetReactionsToMessage(message,2,["a",'b','c','d','e'])
+
 
             break;
+
+
+        // case "whobot_help":
+        //     // console.log(message);
+        //     // message.attachments.forEach((attachments) =>{
+        //     //     message.channel.send(attachments.url);
+        //     // })
+        //     message.reply(getHelpMsg());
+        //
+        //     break;
 
         case "quiz":
 
             const filter = (m) => m.author.id === message.author.id;
 
             if(!channelMessageManager.hasChannel(message.channel)){
-                getMessages(message.channel,150).then( (messages)=>{
+                getMessages(message.channel,1000).then( (messages)=>{
                     channelMessageManager.addNewMessagesForChannel(message.channel,messages);
                     quizSendAndListen(message,channelMessageManager,filter);
                 }).catch(console.error);
