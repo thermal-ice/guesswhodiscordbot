@@ -340,17 +340,8 @@ client.on("message", (message)=>{
 
 });
 
-
-client.login(config.BOT_TOKEN).then( ()=>{
-    client.user.setPresence({
-        status: 'online',
-        afk: false,
-        activity: {
-            name: `use !whobot_help"`, type: 'PLAYING',}
-    });
-});
-
-// client.login(process.env.BOT_TOKEN).then( ()=>{
+//
+// client.login(config.BOT_TOKEN).then( ()=>{
 //     client.user.setPresence({
 //         status: 'online',
 //         afk: false,
@@ -358,4 +349,13 @@ client.login(config.BOT_TOKEN).then( ()=>{
 //             name: `use !whobot_help"`, type: 'PLAYING',}
 //     });
 // });
+
+client.login(process.env.BOT_TOKEN).then( ()=>{
+    client.user.setPresence({
+        status: 'online',
+        afk: false,
+        activity: {
+            name: `use !whobot_help"`, type: 'PLAYING',}
+    });
+});
 
