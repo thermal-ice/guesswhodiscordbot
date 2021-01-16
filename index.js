@@ -1,6 +1,6 @@
 
 const Discord = require('discord.js')
-const config = require('./config.json')
+// const config = require('./config.json')
 const ChannelMessageStorageFile = require('./channelMessageStorage')
 const botConfigerations = require('./botConfigerations');
 
