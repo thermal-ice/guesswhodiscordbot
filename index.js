@@ -10,6 +10,8 @@ const client = new Discord.Client();
 
 //There is only 1 web dyno running at once. scale it back to 1
 
+//TODO: Handle cases of 4 or less users in server.
+
 
 const prefix = "!";
 const numChoices = 4
@@ -17,12 +19,8 @@ const numChoices = 4
 function getRandomElemFromArr(array){
     return array[Math.floor(Math.random() * array.length)];
 
-}
+    //this part works, gets a random message
 
-function addElemToRandomIndexInArr(array, elem){
-    let index = Math.floor(Math.random() * array.length);
-    array.splice(index,0,elem);
-    return array;
 }
 
 function getNRandomFromArr(arr, n) {
@@ -82,9 +80,10 @@ async function getMessages(channel, limit = 200){
                 let filteredMsgs = msgsArr.filter ( m =>{
                     return m !== undefined && (m.attachments.size > 0 || m.content.length > 0)
                         && !m.author.bot
-                        && !m.content.match(/^(!whobot_help|!quiz)$/)
-                        && !messageOnlyContainsMentions(m.content);
+                        && !((/^(!whobot_help|!quiz)$/).test(m.content))
+                       && !messageOnlyContainsMentions(m.content);
                 });
+
 
                 out.push(...filteredMsgs);
                 last_id = msgsArr[(msgsArr.length - 1)].id;
@@ -101,8 +100,7 @@ async function getMessages(channel, limit = 200){
 
 
 function getHelpMsg(){
-    return "Type *!quiz* to get a random message from before. Then respond with a mention of who you believe it to be " +
-        "(e.g @bob)."
+    return "Type *!quiz* to get a random message from before. Then pick a numbered emoji of who you believe it to be when prompted"
 }
 
 function fetchUsersFromGuildExcludingOne(guild,userToExclude){
@@ -129,8 +127,9 @@ function fetchUsersFromGuildExcludingOne(guild,userToExclude){
 
 function getTypeOfMessage(message){
     if (message.content.length > 0 && message.attachments.size >0) return "both";
-    if (message.content.length > 0) return "text";
     if (message.attachments.size > 0) return "image";
+    if (message.content.length > 0) return "text";
+
     //Does not have text nor images, something weird happened
     return "neither";
 }
@@ -169,14 +168,14 @@ async function awaitAndGetReactionsToMessage(quizMessage,authorIndex,choicesArr)
             }
 
             if(emojiIndex === authorIndex){
-                quizMessage.channel.send(`Correct, it indeed was: **${choicesArr[authorIndex]} **`)
+                quizMessage.reply(`Correct, it indeed was: **${choicesArr[authorIndex]} **`)
             }else{
-                quizMessage.channel.send(`Incorrect lmao! It's not **${choicesArr[emojiIndex]}**, it actually was **${choicesArr[authorIndex]}**`);
+                quizMessage.reply(`Incorrect! It's not **${choicesArr[emojiIndex]}**, it actually was **${choicesArr[authorIndex]}**`);
             }
 
         })
         .catch(collected => {
-            message.reply(`Timed out, you need to pick one of the options dumbass. It was **${choicesArr[authorIndex]}**`);
+            quizMessage.reply(`Timed out, you need to pick one of the options. It was **${choicesArr[authorIndex]}**`);
         });
 }
 
@@ -192,19 +191,52 @@ function quizSendAndListen(quizMessage,channelMessageManagerInstance , filter){
 
 
 
-    let messageType = getTypeOfMessage(quizMessage);
+    let messageType = getTypeOfMessage(randomMsg);
 
     switch (messageType) {
         case "text":
-            quizMessage.reply(`guess who said the message below: \n ${randomMsg.content}`).then( ()=>{
+            quizMessage.reply(`guess who said the message below: \n> ${randomMsg.content}`).then( ()=>{
                 fetchUsersFromGuildExcludingOne(quizMessage.guild , msgAuthor).then( (fetchResult) =>{
                     let index = fetchResult[0];
                     let userNamesArr = fetchResult[1];
-
                     awaitAndGetReactionsToMessage(quizMessage,index,userNamesArr).catch(console.error);
                 });
 
             }).catch(console.error);
+            break;
+
+        case "image":
+            quizMessage.reply(`guess who sent the image below:`).then( ()=>{
+                fetchUsersFromGuildExcludingOne(quizMessage.guild , msgAuthor).then( (fetchResult) =>{
+                    let index = fetchResult[0];
+                    let userNamesArr = fetchResult[1];
+                    randomMsg.attachments.forEach((attachments) =>{
+                        quizMessage.channel.send(attachments.url);
+                    })
+
+                    awaitAndGetReactionsToMessage(quizMessage,index,userNamesArr).catch(console.error);
+                });
+            }).catch(console.error);
+            break;
+
+        case "both":
+            quizMessage.reply(`guess who sent the message and images below: \n> ${randomMsg.content}`).then( ()=>{
+                fetchUsersFromGuildExcludingOne(quizMessage.guild , msgAuthor).then( (fetchResult) =>{
+                    let index = fetchResult[0];
+                    let userNamesArr = fetchResult[1];
+                    randomMsg.attachments.forEach((attachments) =>{
+                        quizMessage.channel.send(attachments.url);
+                    })
+
+                    awaitAndGetReactionsToMessage(quizMessage,index,userNamesArr).catch(console.error);
+                });
+            }).catch(console.error);
+            break;
+
+        case "neither":
+            quizMessage.reply(`For some reason the message has neither attachments nor text.` +
+            `Weird, shouldn't happen. Try again please`);
+            break;
 
     }
 
@@ -283,21 +315,20 @@ client.on("message", (message)=>{
             break;
 
 
-        // case "whobot_help":
-        //     // console.log(message);
-        //     // message.attachments.forEach((attachments) =>{
-        //     //     message.channel.send(attachments.url);
-        //     // })
-        //     message.reply(getHelpMsg());
-        //
-        //     break;
+        case "whobot_help":
+            // // console.log(message);
+            // message.attachments.forEach((attachments) =>{
+            //     message.channel.send(attachments.url);
+            // })
+            message.reply(getHelpMsg());
+            break;
 
         case "quiz":
 
             const filter = (m) => m.author.id === message.author.id;
 
             if(!channelMessageManager.hasChannel(message.channel)){
-                getMessages(message.channel,1000).then( (messages)=>{
+                getMessages(message.channel,500).then( (messages)=>{
                     channelMessageManager.addNewMessagesForChannel(message.channel,messages);
                     quizSendAndListen(message,channelMessageManager,filter);
                 }).catch(console.error);

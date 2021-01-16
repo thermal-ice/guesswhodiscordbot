@@ -44,7 +44,7 @@ class ChannelMessageStorage{
             return m !== undefined && (m.attachments.size > 0 || m.content.length > 0)
                 && !m.author.bot
                 && !m.content.match(/^(!whobot_help|!quiz)$/)
-                && !messageOnlyContainsMentions(m.content);
+                && !((/^(!whobot_help|!quiz)$/).test(m.content)); //Doesn't contain the bot commands
         });
             this.messages.unshift(filteredMsgs);
             this.mostRecentMsgId = newMsgs[0].id;
