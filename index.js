@@ -1,6 +1,6 @@
 
 const Discord = require('discord.js')
-// const config = require('./config.json')
+const config = require('./config.json')
 const ChannelMessageStorageFile = require('./channelMessageStorage')
 const botConfigerations = require('./botConfigerations');
 
@@ -11,7 +11,9 @@ const client = new Discord.Client();
 //There is only 1 web dyno running at once. scale it back to 1
 
 //TODO: Handle cases of 4 or less users in server.
-
+//TODO: Embed choices all as one reply message
+//TODO: Ignore multiple !quiz requests by one user at once
+//TODO: get biases of who sent messages
 
 const prefix = "!";
 const numChoices = 4
@@ -340,17 +342,8 @@ client.on("message", (message)=>{
 
 });
 
-//
-// client.login(config.BOT_TOKEN).then( ()=>{
-//     client.user.setPresence({
-//         status: 'online',
-//         afk: false,
-//         activity: {
-//             name: `use !whobot_help"`, type: 'PLAYING',}
-//     });
-// });
 
-client.login(process.env.BOT_TOKEN).then( ()=>{
+client.login(config.BOT_TOKEN).then( ()=>{
     client.user.setPresence({
         status: 'online',
         afk: false,
@@ -358,4 +351,13 @@ client.login(process.env.BOT_TOKEN).then( ()=>{
             name: `use !whobot_help"`, type: 'PLAYING',}
     });
 });
+
+// client.login(process.env.BOT_TOKEN).then( ()=>{
+//     client.user.setPresence({
+//         status: 'online',
+//         afk: false,
+//         activity: {
+//             name: `use !whobot_help"`, type: 'PLAYING',}
+//     });
+// });
 
